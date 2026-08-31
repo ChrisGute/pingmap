@@ -6,7 +6,7 @@ const els = {
   latitude: $("latitude"), longitude: $("longitude"), accuracy: $("accuracy"), gpsStatus: $("gpsStatus"),
   count: $("sampleCount"), failures: $("failureCount"), lastSample: $("lastSample"), log: $("log"), maps: $("mapsLink"),
   detectedDevice: $("detectedDevice"), network: $("networkInfo"), chart: $("chart"), thresholdLegend: $("thresholdLegend"),
-  failureSummary: $("failureSummary"), heatToggle: $("heatToggle")
+  failureSummary: $("failureSummary"), heatToggle: $("heatToggle"), keepAwake: $("keepAwake"), wakeStatus: $("wakeStatus")
 };
 
 let running = false;
@@ -19,6 +19,7 @@ let marker = null;
 let heatLayer = null;
 let heatEnabled = true;
 let chartWindow = 30;
+let wakeLock = null;
 
 function thresholdValue() {
   const value = Number(els.threshold.value);
@@ -33,6 +34,37 @@ function requestTimeoutValue() {
 function setState(text, type = "idle") {
   els.state.textContent = text;
   els.state.className = `state ${type}`;
+}
+
+function setWakeStatus(text) {
+  els.wakeStatus.textContent = text;
+}
+
+async function requestWakeLock() {
+  if (!running || !els.keepAwake.checked) return;
+  if (!("wakeLock" in navigator)) {
+    setWakeStatus("This browser does not support screen stay-awake.");
+    return;
+  }
+  if (wakeLock && !wakeLock.released) return;
+  try {
+    wakeLock = await navigator.wakeLock.request("screen");
+    setWakeStatus("Screen stay-awake is active while testing.");
+    wakeLock.addEventListener("release", () => {
+      wakeLock = null;
+      if (running && els.keepAwake.checked && document.visibilityState === "visible") requestWakeLock();
+    });
+  } catch {
+    setWakeStatus("Screen stay-awake was unavailable; keep this page visible.");
+  }
+}
+
+async function releaseWakeLock() {
+  if (!wakeLock) return;
+  const lock = wakeLock;
+  wakeLock = null;
+  try { await lock.release(); } catch { /* Already released by the device. */ }
+  setWakeStatus("Screen stay-awake is off.");
 }
 
 function detectDeviceAndNetwork() {
@@ -241,6 +273,7 @@ function start() {
   if (running) return;
   running = true; els.start.disabled = true; els.stop.disabled = false;
   setState("Testing", "running");
+  requestWakeLock();
   if (!navigator.geolocation) locationError({ code: 2 });
   else watchId = navigator.geolocation.watchPosition(updateLocation, locationError, { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 });
   takeSample(); scheduleNextSample();
@@ -250,6 +283,7 @@ function stop() {
   running = false; clearInterval(timer); timer = null;
   if (watchId !== null) navigator.geolocation.clearWatch(watchId);
   watchId = null; els.start.disabled = false; els.stop.disabled = true; setState("Paused", "idle");
+  releaseWakeLock();
 }
 
 function exportCsv() {
@@ -275,9 +309,17 @@ document.querySelectorAll(".range-button").forEach((button) => button.addEventLi
 els.heatToggle.addEventListener("click", () => {
   heatEnabled = !heatEnabled; els.heatToggle.textContent = `Heatmap: ${heatEnabled ? "On" : "Off"}`; updateHeatmap();
 });
+els.keepAwake.addEventListener("change", () => {
+  if (!running) return;
+  if (els.keepAwake.checked) requestWakeLock();
+  else releaseWakeLock();
+});
 window.addEventListener("resize", drawChart);
 window.addEventListener("online", () => { updateNetworkInfo(navigator.connection || {}); if (running) setState("Testing", "running"); });
 window.addEventListener("offline", () => setState("Offline", "error"));
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && running && els.keepAwake.checked) requestWakeLock();
+});
 
 detectDeviceAndNetwork();
 drawChart();

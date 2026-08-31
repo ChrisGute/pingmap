@@ -42,6 +42,9 @@ input:focus { border-color: var(--blue); outline: 2px solid #55a9ff33; }
 .input-with-unit span { color: var(--muted); font-weight: 700; margin-bottom: 12px; }
 .hint, footer p { color: var(--muted); font-size: 12px; margin: -3px 0 14px; }
 .button-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.stay-awake { align-items: center; color: var(--text); display: flex; font-size: 13px; gap: 8px; margin: 14px 0 5px; }
+.stay-awake input { accent-color: var(--blue); height: 16px; margin: 0; width: 16px; }
+.wake-status { margin-bottom: 0; }
 button { background: var(--panel-2); border: 1px solid var(--line); border-radius: 9px; color: var(--text); cursor: pointer; font: inherit; font-weight: 750; padding: 11px 15px; }
 button:hover:not(:disabled) { border-color: var(--blue); }
 button:disabled { cursor: not-allowed; opacity: .42; }
