@@ -6,7 +6,7 @@ const els = {
   latitude: $("latitude"), longitude: $("longitude"), accuracy: $("accuracy"), gpsStatus: $("gpsStatus"),
   count: $("sampleCount"), failures: $("failureCount"), lastSample: $("lastSample"), log: $("log"), maps: $("mapsLink"),
   detectedDevice: $("detectedDevice"), network: $("networkInfo"), chart: $("chart"), thresholdLegend: $("thresholdLegend"),
-  failureSummary: $("failureSummary"), heatToggle: $("heatToggle"), keepAwake: $("keepAwake"), wakeStatus: $("wakeStatus")
+  failureSummary: $("failureSummary"), heatToggle: $("heatToggle"), keepAwake: $("keepAwake"), wakeStatus: $("wakeStatus"), pollStatus: $("pollStatus")
 };
 
 let running = false;
@@ -20,6 +20,9 @@ let heatLayer = null;
 let heatEnabled = true;
 let chartWindow = 30;
 let wakeLock = null;
+let lastGpsPoint = null;
+let gpsIsStationary = false;
+let lastProbeStartedAt = 0;
 
 function thresholdValue() {
   const value = Number(els.threshold.value);
@@ -29,6 +32,38 @@ function thresholdValue() {
 function requestTimeoutValue() {
   const value = Number(els.timeout.value);
   return Number.isFinite(value) && value >= 100 ? Math.min(value, 10000) : 600;
+}
+
+function distanceMeters(a, b) {
+  const radians = Math.PI / 180;
+  const lat1 = a.latitude * radians, lat2 = b.latitude * radians;
+  const dLat = (b.latitude - a.latitude) * radians;
+  const dLon = (b.longitude - a.longitude) * radians;
+  const value = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+  return 6371000 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
+}
+
+function probeIntervalMs() {
+  return gpsIsStationary ? 30000 : 1000;
+}
+
+function updatePollStatus() {
+  els.pollStatus.textContent = gpsIsStationary
+    ? "GPS is stationary — probes are running every 30 seconds."
+    : "GPS is moving or unavailable — probes are running every second.";
+}
+
+function updateMovementState(coords) {
+  const point = { latitude: coords.latitude, longitude: coords.longitude, accuracy: coords.accuracy || 0 };
+  if (!lastGpsPoint) {
+    lastGpsPoint = point;
+    gpsIsStationary = false;
+  } else {
+    const tolerance = Math.max(12, point.accuracy, lastGpsPoint.accuracy);
+    gpsIsStationary = distanceMeters(lastGpsPoint, point) <= tolerance;
+    lastGpsPoint = point;
+  }
+  updatePollStatus();
 }
 
 function setState(text, type = "idle") {
@@ -138,6 +173,7 @@ function updateLocation(position) {
   els.longitude.textContent = `Longitude ${longitude.toFixed(6)}`;
   els.accuracy.textContent = `${Math.round(accuracy)} m`;
   els.gpsStatus.textContent = `Updated ${new Date(position.timestamp).toLocaleTimeString()}`;
+  updateMovementState(position.coords);
   els.maps.href = `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
   els.maps.hidden = false;
   initMap();
@@ -235,7 +271,12 @@ async function takeSample() {
 
 function scheduleNextSample() {
   if (!running) return;
-  timer = setInterval(takeSample, 1000);
+  timer = setInterval(() => {
+    const now = Date.now();
+    if (now - lastProbeStartedAt < probeIntervalMs()) return;
+    lastProbeStartedAt = now;
+    takeSample();
+  }, 250);
 }
 
 function drawChart() {
@@ -273,6 +314,10 @@ function start() {
   if (running) return;
   running = true; els.start.disabled = true; els.stop.disabled = false;
   setState("Testing", "running");
+  lastGpsPoint = null;
+  gpsIsStationary = false;
+  lastProbeStartedAt = Date.now();
+  updatePollStatus();
   requestWakeLock();
   if (!navigator.geolocation) locationError({ code: 2 });
   else watchId = navigator.geolocation.watchPosition(updateLocation, locationError, { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 });

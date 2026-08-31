@@ -37,6 +37,7 @@
       <label for="requestTimeout">Request timeout</label>
       <div class="input-with-unit"><input id="requestTimeout" type="number" min="100" max="10000" step="100" value="600"><span>ms</span></div>
       <p class="hint">A probe is marked as timed out at this limit. New probes start every second regardless of the previous result.</p>
+      <p id="pollStatus" class="hint poll-status">Probe rate: every second while GPS is moving.</p>
 
       <label for="threshold">Dead-zone threshold</label>
       <div class="input-with-unit"><input id="threshold" type="number" min="1" max="60000" step="50" value="500"><span>ms</span></div>
