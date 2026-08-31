@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b1220">
+  <title>PingMap</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="wrap">
+    <header>
+      <div>
+        <p class="eyebrow">FIELD TEST TOOL</p>
+        <h1>PingMap</h1>
+        <p class="intro">Walk around and record mobile latency alongside your GPS position.</p>
+      </div>
+      <span id="runState" class="state idle">Ready</span>
+    </header>
+
+    <section class="panel controls">
+      <label for="deviceName">Phone / network label</label>
+      <input id="deviceName" type="text" maxlength="40" placeholder="e.g. iPhone - Verizon" autocomplete="off">
+
+      <label for="pingUrl">Test endpoint</label>
+      <input id="pingUrl" type="url" value="ping.txt" spellcheck="false">
+      <p class="hint">The default endpoint is this GitHub Pages site. Results are HTTP latency, not ICMP ping.</p>
+
+      <div class="button-row">
+        <button id="startBtn" class="primary">Start test</button>
+        <button id="stopBtn" disabled>Stop</button>
+        <button id="exportBtn" disabled>Export CSV</button>
+      </div>
+    </section>
+
+    <section class="stats" aria-live="polite">
+      <article class="card"><span>Latency</span><strong id="latency">—</strong><small id="latencyStatus">No test yet</small></article>
+      <article class="card"><span>Latitude</span><strong id="latitude">—</strong><small id="longitude">Longitude —</small></article>
+      <article class="card"><span>GPS accuracy</span><strong id="accuracy">—</strong><small id="gpsStatus">Waiting for permission</small></article>
+      <article class="card"><span>Samples</span><strong id="sampleCount">0</strong><small id="lastSample">Nothing recorded</small></article>
+    </section>
+
+    <section class="panel map-panel">
+      <div class="section-heading"><h2>Current location</h2><a id="mapsLink" href="#" target="_blank" rel="noopener" hidden>Open in Maps</a></div>
+      <div id="map" aria-label="Map showing current location"><div class="map-message">Start the test to request your location.</div></div>
+    </section>
+
+    <section class="panel log-panel">
+      <div class="section-heading"><h2>Recent readings</h2><button id="clearBtn" class="text-button" disabled>Clear</button></div>
+      <div id="log" class="log"><p class="empty">Your readings will appear here.</p></div>
+    </section>
+
+    <footer>
+      <p>Keep this page open and the screen awake while walking. Location data stays on this phone until you export it.</p>
+    </footer>
+  </main>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="app.js"></script>
+</body>
+</html>
