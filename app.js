@@ -194,18 +194,10 @@ function scheduleNextSample() {
 }
 
 function drawChart() {
-  const canvas = els.chart;
-  const rect = canvas.getBoundingClientRect();
-  if (!rect.width) return;
-  const dpr = window.devicePixelRatio || 1;
-  const width = Math.round(rect.width * dpr), height = Math.round(rect.height * dpr);
-  if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
-  const ctx = canvas.getContext("2d");
-  ctx.clearRect(0, 0, width, height);
-  ctx.save(); ctx.scale(dpr, dpr);
-  const w = rect.width, h = rect.height;
-  const pad = { left: 42, right: 10, top: 14, bottom: 25 };
-  const plotW = Math.max(1, w - pad.left - pad.right), plotH = Math.max(1, h - pad.top - pad.bottom);
+  const chart = els.chart;
+  const w = 700, h = 230;
+  const pad = { left: 48, right: 12, top: 14, bottom: 28 };
+  const plotW = w - pad.left - pad.right, plotH = h - pad.top - pad.bottom;
   const now = Date.now(), start = now - chartWindow * 1000;
   const visible = samples.filter((s) => Date.parse(s.timestamp) >= start);
   const threshold = thresholdValue();
@@ -213,27 +205,23 @@ function drawChart() {
   const max = Math.max(threshold * 1.2, ...(latencies.length ? latencies : [0])) * 1.1;
   const x = (time) => pad.left + Math.max(0, Math.min(1, (time - start) / (chartWindow * 1000))) * plotW;
   const y = (value) => pad.top + plotH - Math.max(0, Math.min(1, value / max)) * plotH;
-  ctx.font = "11px system-ui, sans-serif";
-  ctx.strokeStyle = "#293a55"; ctx.lineWidth = 1; ctx.fillStyle = "#9eacc0";
-  for (let i = 0; i <= 3; i++) {
+  const grid = Array.from({ length: 4 }, (_, i) => {
     const value = Math.round((max * i) / 3), yy = y(value);
-    ctx.beginPath(); ctx.moveTo(pad.left, yy); ctx.lineTo(w - pad.right, yy); ctx.stroke(); ctx.fillText(`${value} ms`, 2, yy + 4);
-  }
-  ctx.setLineDash([5, 4]); ctx.strokeStyle = "#ff7474aa";
-  ctx.beginPath(); ctx.moveTo(pad.left, y(threshold)); ctx.lineTo(w - pad.right, y(threshold)); ctx.stroke(); ctx.setLineDash([]);
+    return `<line x1="${pad.left}" y1="${yy}" x2="${w - pad.right}" y2="${yy}" stroke="#293a55"/><text x="2" y="${yy + 4}" fill="#9eacc0" font-size="11">${value} ms</text>`;
+  }).join("");
+  const thresholdLine = `<line x1="${pad.left}" y1="${y(threshold)}" x2="${w - pad.right}" y2="${y(threshold)}" stroke="#ff7474" stroke-opacity=".7" stroke-dasharray="5 4"/>`;
   if (!visible.length) {
-    ctx.fillStyle = "#9eacc0"; ctx.fillText("Start the test to see latency", pad.left + 8, pad.top + plotH / 2);
-    ctx.restore(); return;
+    chart.innerHTML = `${grid}${thresholdLine}<text x="${pad.left + 12}" y="${pad.top + plotH / 2}" fill="#9eacc0" font-size="13">Start the test to see latency</text>`;
+    return;
   }
-  ctx.strokeStyle = "#55a9ff"; ctx.lineWidth = 2; ctx.beginPath();
-  visible.forEach((s, i) => { const xx = x(Date.parse(s.timestamp)), yy = y(s.latency == null ? threshold : s.latency); if (i === 0) ctx.moveTo(xx, yy); else ctx.lineTo(xx, yy); });
-  ctx.stroke();
-  visible.forEach((s) => {
-    if (!s.deadZone) return;
-    ctx.fillStyle = "#ff7474"; ctx.beginPath(); ctx.arc(x(Date.parse(s.timestamp)), y(s.latency == null ? threshold : s.latency), 4, 0, Math.PI * 2); ctx.fill();
-  });
-  ctx.fillStyle = "#9eacc0"; ctx.fillText(`${chartWindow < 60 ? chartWindow + "s" : chartWindow / 60 + "m"} window`, pad.left, h - 6);
-  ctx.restore();
+  const points = visible.map((s) => `${x(Date.parse(s.timestamp))},${y(s.latency == null ? threshold : s.latency)}`).join(" ");
+  const dots = visible.map((s) => {
+    const color = s.deadZone ? "#ff7474" : "#55a9ff";
+    const radius = s.deadZone ? 4.5 : 2.5;
+    return `<circle cx="${x(Date.parse(s.timestamp))}" cy="${y(s.latency == null ? threshold : s.latency)}" r="${radius}" fill="${color}"/>`;
+  }).join("");
+  const label = `${chartWindow < 60 ? `${chartWindow}s` : `${chartWindow / 60}m`} window`;
+  chart.innerHTML = `${grid}${thresholdLine}<polyline points="${points}" fill="none" stroke="#55a9ff" stroke-width="2.5" vector-effect="non-scaling-stroke"/>${dots}<text x="${pad.left}" y="${h - 7}" fill="#9eacc0" font-size="11">${label}</text>`;
 }
 
 function start() {
