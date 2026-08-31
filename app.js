@@ -25,6 +25,8 @@ let gpsIsStationary = false;
 let lastProbeStartedAt = 0;
 let detectedDeviceName = "Mobile device";
 let deviceNameOverridden = false;
+let hasReliableGpsFix = false;
+let stationarySince = null;
 
 function thresholdValue() {
   const value = Number(els.threshold.value);
@@ -50,19 +52,39 @@ function probeIntervalMs() {
 }
 
 function updatePollStatus() {
-  els.pollStatus.textContent = gpsIsStationary
-    ? "GPS is stationary — probes are running every 30 seconds."
-    : "GPS is moving or unavailable — probes are running every second.";
+  if (!hasReliableGpsFix) {
+    els.pollStatus.textContent = "GPS fix is not reliable yet — probes are running every second.";
+  } else {
+    els.pollStatus.textContent = gpsIsStationary
+      ? "GPS has been stationary — probes are running every 30 seconds."
+      : "GPS is moving — probes are running every second.";
+  }
 }
 
 function updateMovementState(coords) {
   const point = { latitude: coords.latitude, longitude: coords.longitude, accuracy: coords.accuracy || 0 };
+  if (!Number.isFinite(point.accuracy) || point.accuracy > 50) {
+    hasReliableGpsFix = false;
+    gpsIsStationary = false;
+    stationarySince = null;
+    lastGpsPoint = null;
+    updatePollStatus();
+    return;
+  }
+  hasReliableGpsFix = true;
   if (!lastGpsPoint) {
     lastGpsPoint = point;
     gpsIsStationary = false;
+    stationarySince = null;
   } else {
     const tolerance = Math.max(12, point.accuracy, lastGpsPoint.accuracy);
-    gpsIsStationary = distanceMeters(lastGpsPoint, point) <= tolerance;
+    if (distanceMeters(lastGpsPoint, point) <= tolerance) {
+      stationarySince ??= Date.now();
+      gpsIsStationary = Date.now() - stationarySince >= 15000;
+    } else {
+      gpsIsStationary = false;
+      stationarySince = null;
+    }
     lastGpsPoint = point;
   }
   updatePollStatus();
@@ -201,6 +223,11 @@ function updateLocation(position) {
 function locationError(error) {
   const messages = { 1: "Location permission denied", 2: "Location unavailable", 3: "Location request timed out" };
   els.gpsStatus.textContent = messages[error.code] || "Location error";
+  hasReliableGpsFix = false;
+  gpsIsStationary = false;
+  stationarySince = null;
+  lastGpsPoint = null;
+  updatePollStatus();
   if (running) setState(messages[error.code] || "Location error", "error");
 }
 
@@ -328,6 +355,8 @@ function start() {
   setState("Testing", "running");
   lastGpsPoint = null;
   gpsIsStationary = false;
+  hasReliableGpsFix = false;
+  stationarySince = null;
   lastProbeStartedAt = Date.now();
   updatePollStatus();
   requestWakeLock();
