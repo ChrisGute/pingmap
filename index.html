@@ -34,6 +34,10 @@
       <input id="pingUrl" type="url" value="ping.txt" spellcheck="false">
       <p class="hint">The default endpoint is this GitHub Pages site. Results are HTTP latency, not ICMP ping.</p>
 
+      <label for="requestTimeout">Request timeout</label>
+      <div class="input-with-unit"><input id="requestTimeout" type="number" min="100" max="10000" step="100" value="600"><span>ms</span></div>
+      <p class="hint">A probe is marked as timed out at this limit. New probes start every second regardless of the previous result.</p>
+
       <label for="threshold">Dead-zone threshold</label>
       <div class="input-with-unit"><input id="threshold" type="number" min="1" max="60000" step="50" value="500"><span>ms</span></div>
       <p class="hint">Every sample at or above this value, plus every timeout/error, is recorded as a dead-zone failure.</p>

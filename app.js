@@ -1,7 +1,7 @@
 /* PingMap: local GPS/HTTP measurements with a small chart and heatmap. */
 const $ = (id) => document.getElementById(id);
 const els = {
-  name: $("deviceName"), url: $("pingUrl"), threshold: $("threshold"), state: $("runState"), start: $("startBtn"), stop: $("stopBtn"),
+  name: $("deviceName"), url: $("pingUrl"), timeout: $("requestTimeout"), threshold: $("threshold"), state: $("runState"), start: $("startBtn"), stop: $("stopBtn"),
   export: $("exportBtn"), clear: $("clearBtn"), latency: $("latency"), latencyStatus: $("latencyStatus"),
   latitude: $("latitude"), longitude: $("longitude"), accuracy: $("accuracy"), gpsStatus: $("gpsStatus"),
   count: $("sampleCount"), failures: $("failureCount"), lastSample: $("lastSample"), log: $("log"), maps: $("mapsLink"),
@@ -23,6 +23,11 @@ let chartWindow = 30;
 function thresholdValue() {
   const value = Number(els.threshold.value);
   return Number.isFinite(value) && value > 0 ? Math.min(value, 60000) : 500;
+}
+
+function requestTimeoutValue() {
+  const value = Number(els.timeout.value);
+  return Number.isFinite(value) && value >= 100 ? Math.min(value, 10000) : 600;
 }
 
 function setState(text, type = "idle") {
@@ -141,26 +146,34 @@ async function measurePing() {
   try { url = new URL(base, window.location.href); }
   catch { throw new Error("Invalid endpoint URL"); }
   url.searchParams.set("t", `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  const requestTimeout = requestTimeoutValue();
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 5000);
+  const timeout = setTimeout(() => controller.abort(), requestTimeout);
   const start = performance.now();
   try {
     const response = await fetch(url.href, { method: "GET", cache: "no-store", signal: controller.signal });
     await response.arrayBuffer();
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return Math.round(performance.now() - start);
+    const elapsed = Math.round(performance.now() - start);
+    if (elapsed >= requestTimeout) {
+      const error = new Error(`Timeout after ${requestTimeout} ms`);
+      error.name = "TimeoutError";
+      throw error;
+    }
+    return elapsed;
   } finally { clearTimeout(timeout); }
 }
 
 async function takeSample() {
   const timestamp = new Date().toISOString();
   const sampleThreshold = thresholdValue();
+  const requestTimeout = requestTimeoutValue();
   let latency = null;
   let errorReason = "";
   try {
     latency = await measurePing();
   } catch (error) {
-    errorReason = error.name === "AbortError" ? "Timeout over 5 seconds" : error.message;
+    errorReason = error.name === "AbortError" || error.name === "TimeoutError" ? `Timeout after ${requestTimeout} ms` : error.message;
   }
   const deadZone = latency == null || latency >= sampleThreshold;
   if (latency == null) {
@@ -174,7 +187,7 @@ async function takeSample() {
   samples.push({
     timestamp, device: els.name.value.trim() || "Unlabeled", latency,
     latitude: coords?.latitude ?? null, longitude: coords?.longitude ?? null,
-    accuracy: coords?.accuracy ?? null, thresholdMs: sampleThreshold, deadZone,
+    accuracy: coords?.accuracy ?? null, thresholdMs: sampleThreshold, requestTimeoutMs: requestTimeout, deadZone,
     failureReason: deadZone ? (errorReason || (latency >= sampleThreshold ? `Latency ≥ ${sampleThreshold} ms` : "")) : ""
   });
   els.count.textContent = samples.length;
@@ -190,7 +203,7 @@ async function takeSample() {
 
 function scheduleNextSample() {
   if (!running) return;
-  timer = setTimeout(async () => { await takeSample(); scheduleNextSample(); }, 1000);
+  timer = setInterval(takeSample, 1000);
 }
 
 function drawChart() {
@@ -234,14 +247,14 @@ function start() {
 }
 
 function stop() {
-  running = false; clearTimeout(timer); timer = null;
+  running = false; clearInterval(timer); timer = null;
   if (watchId !== null) navigator.geolocation.clearWatch(watchId);
   watchId = null; els.start.disabled = false; els.stop.disabled = true; setState("Paused", "idle");
 }
 
 function exportCsv() {
-  const header = "timestamp,device,latency_ms,dead_zone,threshold_ms,failure_reason,latitude,longitude,gps_accuracy_m\n";
-  const rows = samples.map((s) => [s.timestamp, s.device, s.latency ?? "", s.deadZone, s.thresholdMs, s.failureReason, s.latitude ?? "", s.longitude ?? "", s.accuracy ?? ""]
+  const header = "timestamp,device,latency_ms,dead_zone,threshold_ms,request_timeout_ms,failure_reason,latitude,longitude,gps_accuracy_m\n";
+  const rows = samples.map((s) => [s.timestamp, s.device, s.latency ?? "", s.deadZone, s.thresholdMs, s.requestTimeoutMs, s.failureReason, s.latitude ?? "", s.longitude ?? "", s.accuracy ?? ""]
     .map((v) => `"${String(v).replaceAll('"', '""')}"`).join(","));
   const blob = new Blob(["\ufeff", header, rows.join("\n")], { type: "text/csv;charset=utf-8" });
   const link = document.createElement("a"); link.href = URL.createObjectURL(blob);
