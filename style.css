@@ -32,6 +32,14 @@ h2 { font-size: 17px; margin: 0; }
 label { color: var(--muted); display: block; font-size: 13px; font-weight: 700; margin: 0 0 6px; }
 input { width: 100%; background: var(--panel-2); border: 1px solid var(--line); border-radius: 9px; color: var(--text); font: inherit; padding: 11px 12px; margin-bottom: 12px; }
 input:focus { border-color: var(--blue); outline: 2px solid #55a9ff33; }
+.detection-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 2px 0 12px; }
+.detection-grid > div { background: var(--panel-2); border: 1px solid var(--line); border-radius: 9px; padding: 9px 10px; min-width: 0; }
+.detection-grid span, .detection-grid strong { display: block; }
+.detection-grid span { color: var(--muted); font-size: 11px; }
+.detection-grid strong { font-size: 13px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.input-with-unit { align-items: center; display: flex; gap: 8px; }
+.input-with-unit input { margin-bottom: 12px; }
+.input-with-unit span { color: var(--muted); font-weight: 700; margin-bottom: 12px; }
 .hint, footer p { color: var(--muted); font-size: 12px; margin: -3px 0 14px; }
 .button-row { display: flex; flex-wrap: wrap; gap: 8px; }
 button { background: var(--panel-2); border: 1px solid var(--line); border-radius: 9px; color: var(--text); cursor: pointer; font: inherit; font-weight: 750; padding: 11px 15px; }
@@ -44,6 +52,19 @@ button.primary { background: var(--blue); border-color: var(--blue); color: #071
 .card strong { display: block; font-size: clamp(21px, 6vw, 30px); margin: 5px 0 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .section-heading { align-items: center; display: flex; justify-content: space-between; margin-bottom: 12px; }
 .section-heading a, .text-button { color: var(--blue); font-size: 13px; padding: 0; background: none; border: 0; }
+.section-heading h2 small { color: var(--red); font-size: 11px; font-weight: 600; margin-left: 5px; }
+.heading-actions { align-items: center; display: flex; gap: 12px; }
+.small-button { color: var(--blue); font-size: 12px; padding: 5px 8px; }
+.range-buttons { display: flex; gap: 4px; }
+.range-button { font-size: 11px; padding: 5px 8px; }
+.range-button.active { background: var(--blue); border-color: var(--blue); color: #071222; }
+.chart-wrap { height: 230px; position: relative; width: 100%; }
+#chart { display: block; height: 100%; width: 100%; }
+.chart-legend { align-items: center; color: var(--muted); display: flex; flex-wrap: wrap; font-size: 11px; gap: 12px; margin-top: 8px; }
+.chart-legend span { align-items: center; display: inline-flex; gap: 4px; }
+.legend-dot { border-radius: 50%; display: inline-block; height: 8px; width: 8px; }
+.legend-dot.good { background: var(--blue); }
+.legend-dot.bad { background: var(--red); }
 #map { background: #172338; border-radius: 10px; height: 310px; overflow: hidden; position: relative; }
 .map-message { color: var(--muted); display: grid; height: 100%; place-items: center; padding: 20px; text-align: center; }
 .leaflet-container { background: #172338; font: inherit; }
@@ -52,7 +73,7 @@ button.primary { background: var(--blue); border-color: var(--blue); color: #071
 .reading { align-items: center; border-top: 1px solid var(--line); display: flex; gap: 10px; justify-content: space-between; padding: 9px 0; }
 .reading:first-child { border-top: 0; }
 .reading-time { color: var(--muted); font-size: 12px; }
-.reading-main { font-size: 13px; font-variant-numeric: tabular-nums; }
+.reading-main { flex: 1; font-size: 13px; font-variant-numeric: tabular-nums; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .reading-ok { color: var(--green); font-weight: 800; }
 .reading-fail { color: var(--red); font-weight: 800; }
 footer { padding: 2px 3px; }
@@ -62,4 +83,7 @@ footer p { margin: 0; }
   .stats { grid-template-columns: repeat(2, 1fr); }
   #map { height: 260px; }
   .button-row button { flex: 1 1 calc(50% - 8px); }
+  .range-buttons { gap: 2px; }
+  .range-button { padding: 5px 6px; }
+  .heading-actions { gap: 7px; }
 }

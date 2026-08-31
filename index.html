@@ -21,12 +21,22 @@
     </header>
 
     <section class="panel controls">
-      <label for="deviceName">Phone / network label</label>
-      <input id="deviceName" type="text" maxlength="40" placeholder="e.g. iPhone - Verizon" autocomplete="off">
+      <label for="deviceName">Phone name / test label</label>
+      <input id="deviceName" type="text" maxlength="40" placeholder="e.g. iPhone 15 - Verizon" autocomplete="off">
+
+      <div class="detection-grid">
+        <div><span>Device guess</span><strong id="detectedDevice">Checking…</strong></div>
+        <div><span>Network info</span><strong id="networkInfo">Checking…</strong></div>
+      </div>
+      <p class="hint">Exact phone models and carrier names are not exposed reliably by mobile browsers. Add them to the label above.</p>
 
       <label for="pingUrl">Test endpoint</label>
       <input id="pingUrl" type="url" value="ping.txt" spellcheck="false">
       <p class="hint">The default endpoint is this GitHub Pages site. Results are HTTP latency, not ICMP ping.</p>
+
+      <label for="threshold">Dead-zone threshold</label>
+      <div class="input-with-unit"><input id="threshold" type="number" min="1" max="60000" step="50" value="500"><span>ms</span></div>
+      <p class="hint">Every sample at or above this value, plus every timeout/error, is recorded as a dead-zone failure.</p>
 
       <div class="button-row">
         <button id="startBtn" class="primary">Start test</button>
@@ -40,15 +50,27 @@
       <article class="card"><span>Latitude</span><strong id="latitude">—</strong><small id="longitude">Longitude —</small></article>
       <article class="card"><span>GPS accuracy</span><strong id="accuracy">—</strong><small id="gpsStatus">Waiting for permission</small></article>
       <article class="card"><span>Samples</span><strong id="sampleCount">0</strong><small id="lastSample">Nothing recorded</small></article>
+      <article class="card"><span>Failures</span><strong id="failureCount">0</strong><small>At threshold / timeout</small></article>
+    </section>
+
+    <section class="panel chart-panel">
+      <div class="section-heading"><h2>Latency over time</h2><div class="range-buttons" role="group" aria-label="Chart time range">
+        <button class="range-button active" data-window="30">30s</button>
+        <button class="range-button" data-window="60">1m</button>
+        <button class="range-button" data-window="300">5m</button>
+        <button class="range-button" data-window="1800">30m</button>
+      </div></div>
+      <div class="chart-wrap"><canvas id="chart" aria-label="Latency chart"></canvas></div>
+      <div class="chart-legend"><span><i class="legend-dot good"></i>Normal</span><span><i class="legend-dot bad"></i>Dead zone / timeout</span><span id="thresholdLegend">Threshold: 500 ms</span></div>
     </section>
 
     <section class="panel map-panel">
-      <div class="section-heading"><h2>Current location</h2><a id="mapsLink" href="#" target="_blank" rel="noopener" hidden>Open in Maps</a></div>
+      <div class="section-heading"><h2>Current location + heatmap</h2><div class="heading-actions"><button id="heatToggle" class="small-button">Heatmap: On</button><a id="mapsLink" href="#" target="_blank" rel="noopener" hidden>Open in Maps</a></div></div>
       <div id="map" aria-label="Map showing current location"><div class="map-message">Start the test to request your location.</div></div>
     </section>
 
     <section class="panel log-panel">
-      <div class="section-heading"><h2>Recent readings</h2><button id="clearBtn" class="text-button" disabled>Clear</button></div>
+      <div class="section-heading"><h2>Recent readings <small id="failureSummary"></small></h2><button id="clearBtn" class="text-button" disabled>Clear</button></div>
       <div id="log" class="log"><p class="empty">Your readings will appear here.</p></div>
     </section>
 
@@ -59,6 +81,7 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
