@@ -23,6 +23,8 @@ let wakeLock = null;
 let lastGpsPoint = null;
 let gpsIsStationary = false;
 let lastProbeStartedAt = 0;
+let detectedDeviceName = "Mobile device";
+let deviceNameOverridden = false;
 
 function thresholdValue() {
   const value = Number(els.threshold.value);
@@ -104,20 +106,29 @@ async function releaseWakeLock() {
 
 function detectDeviceAndNetwork() {
   const ua = navigator.userAgent || "";
-  let device = "Unknown device";
-  if (/iPhone/i.test(ua)) device = "iPhone";
-  else if (/iPad/i.test(ua)) device = "iPad";
-  else if (/Android/i.test(ua)) device = "Android phone";
-  else if (/Windows Phone/i.test(ua)) device = "Windows phone";
-  els.detectedDevice.textContent = device;
+  if (/iPhone/i.test(ua)) detectedDeviceName = "iPhone";
+  else if (/iPad/i.test(ua)) detectedDeviceName = "iPad";
+  else if (/Android/i.test(ua)) detectedDeviceName = "Android phone";
+  else if (/Windows Phone/i.test(ua)) detectedDeviceName = "Windows phone";
+  els.detectedDevice.textContent = detectedDeviceName;
 
   const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
   if (!connection) {
     els.network.textContent = "Unavailable in this browser";
+    updateAutomaticDeviceName();
     return;
   }
   updateNetworkInfo(connection);
   connection.addEventListener?.("change", () => updateNetworkInfo(connection));
+}
+
+function networkName(connection) {
+  return connection?.effectiveType || connection?.type || "network";
+}
+
+function updateAutomaticDeviceName(connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection) {
+  if (deviceNameOverridden) return;
+  els.name.value = `${detectedDeviceName} - ${networkName(connection)}`;
 }
 
 function updateNetworkInfo(connection) {
@@ -128,6 +139,7 @@ function updateNetworkInfo(connection) {
   if (effective && effective !== type) parts.push(effective);
   if (Number.isFinite(connection.downlink)) parts.push(`${connection.downlink} Mbps`);
   els.network.textContent = parts.length ? parts.join(" · ") : "Online (details unavailable)";
+  updateAutomaticDeviceName(connection);
 }
 
 function initMap() {
@@ -343,6 +355,7 @@ function exportCsv() {
 els.start.addEventListener("click", start);
 els.stop.addEventListener("click", stop);
 els.export.addEventListener("click", exportCsv);
+els.name.addEventListener("input", () => { deviceNameOverridden = true; });
 els.clear.addEventListener("click", () => {
   samples = []; els.count.textContent = "0"; els.failures.textContent = "0"; els.lastSample.textContent = "Nothing recorded";
   els.export.disabled = true; els.clear.disabled = true; drawLog(); updateHeatmap(); drawChart();

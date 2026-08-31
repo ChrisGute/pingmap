@@ -22,13 +22,13 @@
 
     <section class="panel controls">
       <label for="deviceName">Phone name / test label</label>
-      <input id="deviceName" type="text" maxlength="40" placeholder="e.g. iPhone 15 - Verizon" autocomplete="off">
+      <input id="deviceName" type="text" maxlength="40" placeholder="e.g. iPhone - 4g" autocomplete="off">
 
       <div class="detection-grid">
         <div><span>Device guess</span><strong id="detectedDevice">Checking…</strong></div>
         <div><span>Network info</span><strong id="networkInfo">Checking…</strong></div>
       </div>
-      <p class="hint">Exact phone models and carrier names are not exposed reliably by mobile browsers. Add them to the label above.</p>
+      <p class="hint">This label is auto-filled from detected device/network details. Edit it to override. Exact phone models and carrier names are not exposed reliably by mobile browsers.</p>
 
       <label for="pingUrl">Test endpoint</label>
       <input id="pingUrl" type="url" value="ping.txt" spellcheck="false">
