@@ -16,8 +16,8 @@ let currentPosition = null;
 let samples = [];
 let map = null;
 let marker = null;
-let heatLayer = null;
-let heatEnabled = true;
+let performanceLayer = null;
+let performanceEnabled = true;
 let chartWindow = 30;
 let wakeLock = null;
 let lastSampleGpsPoint = null;
@@ -166,30 +166,60 @@ function initMap() {
   updateHeatmap();
 }
 
-function heatPoints() {
-  return samples.filter((s) => s.latitude != null && s.longitude != null).map((s) => {
-    const limit = Number(s.thresholdMs) || thresholdValue();
-    const intensity = s.deadZone ? 1 : Math.max(0.08, Math.min(0.8, (s.latency || 0) / limit));
-    return [s.latitude, s.longitude, intensity];
+function latLngFromMercator(x, y) {
+  const earthRadius = 6378137;
+  return [
+    (2 * Math.atan(Math.exp(y / earthRadius)) - Math.PI / 2) * 180 / Math.PI,
+    x * 180 / (Math.PI * earthRadius)
+  ];
+}
+
+function performanceZones() {
+  const earthRadius = 6378137;
+  const cellSizeMeters = 20;
+  const zones = new Map();
+  samples.filter((s) => s.latitude != null && s.longitude != null).forEach((sample) => {
+    const latitudeRadians = sample.latitude * Math.PI / 180;
+    const x = earthRadius * sample.longitude * Math.PI / 180;
+    const y = earthRadius * Math.log(Math.tan(Math.PI / 4 + latitudeRadians / 2));
+    const cellX = Math.floor(x / cellSizeMeters);
+    const cellY = Math.floor(y / cellSizeMeters);
+    const key = `${cellX}:${cellY}`;
+    const zone = zones.get(key) || { cellX, cellY, totalRatio: 0, count: 0, failures: 0 };
+    const threshold = Number(sample.thresholdMs) || thresholdValue();
+    const latency = sample.latency == null ? threshold * 1.25 : sample.latency;
+    zone.totalRatio += latency / threshold;
+    zone.count += 1;
+    if (sample.deadZone) zone.failures += 1;
+    zones.set(key, zone);
   });
+  return [...zones.values()];
+}
+
+function performanceColor(ratio) {
+  if (ratio < 0.5) return "#51d88a";
+  if (ratio < 1) return "#ffd166";
+  return "#ff4d5e";
 }
 
 function updateHeatmap() {
-  if (!map || !window.L.heatLayer) return;
-  if (!heatEnabled) {
-    if (heatLayer) map.removeLayer(heatLayer);
+  if (!map || !window.L) return;
+  if (!performanceEnabled) {
+    if (performanceLayer) map.removeLayer(performanceLayer);
     return;
   }
-  const points = heatPoints();
-  if (!heatLayer) {
-    heatLayer = L.heatLayer(points, {
-      radius: 25, blur: 20, maxZoom: 17, max: 1.0,
-      gradient: { 0.15: "#55a9ff", 0.45: "#51d88a", 0.7: "#ffd166", 1: "#ff4d5e" }
-    }).addTo(map);
-  } else {
-    heatLayer.setLatLngs(points);
-    if (!map.hasLayer(heatLayer)) heatLayer.addTo(map);
-  }
+  if (performanceLayer) map.removeLayer(performanceLayer);
+  performanceLayer = L.layerGroup(performanceZones().map((zone) => {
+    const x1 = zone.cellX * 20, y1 = zone.cellY * 20;
+    const [south, west] = latLngFromMercator(x1, y1);
+    const [north, east] = latLngFromMercator(x1 + 20, y1 + 20);
+    const ratio = zone.totalRatio / zone.count;
+    const averagePercent = Math.round(ratio * 100);
+    const color = performanceColor(ratio);
+    return L.rectangle([[south, west], [north, east]], {
+      color, weight: 1, fillColor: color, fillOpacity: 0.78
+    }).bindTooltip(`${zone.count} test${zone.count === 1 ? "" : "s"} · average ${averagePercent}% of threshold${zone.failures ? ` · ${zone.failures} failure${zone.failures === 1 ? "" : "s"}` : ""}`);
+  })).addTo(map);
 }
 
 function updateLocation(position) {
@@ -418,7 +448,7 @@ document.querySelectorAll(".range-button").forEach((button) => button.addEventLi
   chartWindow = Number(button.dataset.window); document.querySelectorAll(".range-button").forEach((b) => b.classList.toggle("active", b === button)); drawChart();
 }));
 els.heatToggle.addEventListener("click", () => {
-  heatEnabled = !heatEnabled; els.heatToggle.textContent = `Heatmap: ${heatEnabled ? "On" : "Off"}`; updateHeatmap();
+  performanceEnabled = !performanceEnabled; els.heatToggle.textContent = `Performance map: ${performanceEnabled ? "On" : "Off"}`; updateHeatmap();
 });
 els.keepAwake.addEventListener("change", () => {
   if (!running) return;
