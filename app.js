@@ -6,7 +6,7 @@ const els = {
   latitude: $("latitude"), longitude: $("longitude"), accuracy: $("accuracy"), gpsStatus: $("gpsStatus"),
   count: $("sampleCount"), failures: $("failureCount"), lastSample: $("lastSample"), log: $("log"), maps: $("mapsLink"),
   detectedDevice: $("detectedDevice"), network: $("networkInfo"), chart: $("chart"), thresholdLegend: $("thresholdLegend"),
-  failureSummary: $("failureSummary"), heatToggle: $("heatToggle"), keepAwake: $("keepAwake"), wakeStatus: $("wakeStatus"), pollStatus: $("pollStatus")
+  failureSummary: $("failureSummary"), heatToggle: $("heatToggle"), keepAwake: $("keepAwake"), wakeStatus: $("wakeStatus"), pollStatus: $("pollStatus"), gpsDelay: $("gpsDelay")
 };
 
 let running = false;
@@ -20,13 +20,13 @@ let heatLayer = null;
 let heatEnabled = true;
 let chartWindow = 30;
 let wakeLock = null;
-let lastGpsPoint = null;
-let gpsIsStationary = false;
-let lastProbeStartedAt = 0;
+let lastSampleGpsPoint = null;
+let stationarySkipCount = 0;
+let nextPollAt = 0;
 let detectedDeviceName = "Mobile device";
 let deviceNameOverridden = false;
 let hasReliableGpsFix = false;
-let stationarySince = null;
+let currentNetworkState = "Unavailable";
 
 function thresholdValue() {
   const value = Number(els.threshold.value);
@@ -47,46 +47,33 @@ function distanceMeters(a, b) {
   return 6371000 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
 }
 
-function probeIntervalMs() {
-  return gpsIsStationary ? 30000 : 1000;
-}
-
 function updatePollStatus() {
+  if (!els.gpsDelay.checked) {
+    els.pollStatus.textContent = "GPS-delay is off — probes are running every second.";
+    return;
+  }
   if (!hasReliableGpsFix) {
     els.pollStatus.textContent = "GPS fix is not reliable yet — probes are running every second.";
   } else {
-    els.pollStatus.textContent = gpsIsStationary
-      ? "GPS has been stationary — probes are running every 30 seconds."
+    els.pollStatus.textContent = stationarySkipCount
+      ? `GPS is unchanged — skipped ${stationarySkipCount} of 30 one-second checks before the next forced probe.`
       : "GPS is moving — probes are running every second.";
   }
 }
 
+function gpsPointsMatch(a, b) {
+  const tolerance = Math.max(12, a.accuracy || 0, b.accuracy || 0);
+  return distanceMeters(a, b) <= tolerance;
+}
+
 function updateMovementState(coords) {
-  const point = { latitude: coords.latitude, longitude: coords.longitude, accuracy: coords.accuracy || 0 };
-  if (!Number.isFinite(point.accuracy) || point.accuracy > 50) {
+  const accuracy = coords.accuracy || 0;
+  if (!Number.isFinite(accuracy) || accuracy > 50) {
     hasReliableGpsFix = false;
-    gpsIsStationary = false;
-    stationarySince = null;
-    lastGpsPoint = null;
     updatePollStatus();
     return;
   }
   hasReliableGpsFix = true;
-  if (!lastGpsPoint) {
-    lastGpsPoint = point;
-    gpsIsStationary = false;
-    stationarySince = null;
-  } else {
-    const tolerance = Math.max(12, point.accuracy, lastGpsPoint.accuracy);
-    if (distanceMeters(lastGpsPoint, point) <= tolerance) {
-      stationarySince ??= Date.now();
-      gpsIsStationary = Date.now() - stationarySince >= 15000;
-    } else {
-      gpsIsStationary = false;
-      stationarySince = null;
-    }
-    lastGpsPoint = point;
-  }
   updatePollStatus();
 }
 
@@ -136,7 +123,8 @@ function detectDeviceAndNetwork() {
 
   const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
   if (!connection) {
-    els.network.textContent = "Unavailable in this browser";
+    currentNetworkState = "Unavailable in this browser";
+    els.network.textContent = currentNetworkState;
     updateAutomaticDeviceName();
     return;
   }
@@ -145,7 +133,10 @@ function detectDeviceAndNetwork() {
 }
 
 function networkName(connection) {
-  return connection?.effectiveType || connection?.type || "network";
+  const type = connection?.type;
+  if (type === "wifi") return "Wi-Fi";
+  if (type === "cellular") return "Cellular";
+  return connection?.effectiveType || type || "network";
 }
 
 function updateAutomaticDeviceName(connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection) {
@@ -154,13 +145,14 @@ function updateAutomaticDeviceName(connection = navigator.connection || navigato
 }
 
 function updateNetworkInfo(connection) {
-  const type = connection.type || "";
+  const type = networkName(connection);
   const effective = connection.effectiveType || "";
   const parts = [];
-  if (type) parts.push(type);
+  if (type && type !== "network") parts.push(type);
   if (effective && effective !== type) parts.push(effective);
   if (Number.isFinite(connection.downlink)) parts.push(`${connection.downlink} Mbps`);
-  els.network.textContent = parts.length ? parts.join(" · ") : "Online (details unavailable)";
+  currentNetworkState = parts.length ? parts.join(" · ") : "Online (details unavailable)";
+  els.network.textContent = currentNetworkState;
   updateAutomaticDeviceName(connection);
 }
 
@@ -224,9 +216,6 @@ function locationError(error) {
   const messages = { 1: "Location permission denied", 2: "Location unavailable", 3: "Location request timed out" };
   els.gpsStatus.textContent = messages[error.code] || "Location error";
   hasReliableGpsFix = false;
-  gpsIsStationary = false;
-  stationarySince = null;
-  lastGpsPoint = null;
   updatePollStatus();
   if (running) setState(messages[error.code] || "Location error", "error");
 }
@@ -273,6 +262,14 @@ async function measurePing() {
 
 async function takeSample() {
   const timestamp = new Date().toISOString();
+  const sampleCoords = currentPosition?.coords;
+  if (hasReliableGpsFix && sampleCoords) {
+    lastSampleGpsPoint = {
+      latitude: sampleCoords.latitude,
+      longitude: sampleCoords.longitude,
+      accuracy: sampleCoords.accuracy || 0
+    };
+  }
   const sampleThreshold = thresholdValue();
   const requestTimeout = requestTimeoutValue();
   let latency = null;
@@ -290,9 +287,9 @@ async function takeSample() {
     els.latency.textContent = `${latency} ms`;
     els.latencyStatus.textContent = deadZone ? `Dead zone ≥ ${sampleThreshold} ms` : "HTTP round-trip";
   }
-  const coords = currentPosition?.coords;
+  const coords = sampleCoords;
   samples.push({
-    timestamp, device: els.name.value.trim() || "Unlabeled", latency,
+    timestamp, device: els.name.value.trim() || "Unlabeled", network: currentNetworkState, latency,
     latitude: coords?.latitude ?? null, longitude: coords?.longitude ?? null,
     accuracy: coords?.accuracy ?? null, thresholdMs: sampleThreshold, requestTimeoutMs: requestTimeout, deadZone,
     failureReason: deadZone ? (errorReason || (latency >= sampleThreshold ? `Latency ≥ ${sampleThreshold} ms` : "")) : ""
@@ -308,14 +305,42 @@ async function takeSample() {
   drawChart();
 }
 
+function shouldTakeSample() {
+  if (!els.gpsDelay.checked) {
+    stationarySkipCount = 0;
+    updatePollStatus();
+    return true;
+  }
+  const coords = currentPosition?.coords;
+  const gpsIsUnchanged = hasReliableGpsFix && coords && lastSampleGpsPoint && gpsPointsMatch(lastSampleGpsPoint, coords);
+  if (!gpsIsUnchanged) {
+    stationarySkipCount = 0;
+    updatePollStatus();
+    return true;
+  }
+  stationarySkipCount += 1;
+  if (stationarySkipCount >= 30) {
+    stationarySkipCount = 0;
+    updatePollStatus();
+    return true;
+  }
+  updatePollStatus();
+  return false;
+}
+
 function scheduleNextSample() {
   if (!running) return;
-  timer = setInterval(() => {
-    const now = Date.now();
-    if (now - lastProbeStartedAt < probeIntervalMs()) return;
-    lastProbeStartedAt = now;
-    takeSample();
-  }, 250);
+  const delay = Math.max(0, nextPollAt - Date.now());
+  timer = setTimeout(() => {
+    if (!running) return;
+    nextPollAt += 1000;
+    // Do not try to replay missed probes after a sleeping/backgrounded browser wakes up.
+    if (nextPollAt <= Date.now()) nextPollAt = Date.now() + 1000;
+    if (shouldTakeSample()) {
+      takeSample();
+    }
+    scheduleNextSample();
+  }, delay);
 }
 
 function drawChart() {
@@ -353,11 +378,10 @@ function start() {
   if (running) return;
   running = true; els.start.disabled = true; els.stop.disabled = false;
   setState("Testing", "running");
-  lastGpsPoint = null;
-  gpsIsStationary = false;
   hasReliableGpsFix = false;
-  stationarySince = null;
-  lastProbeStartedAt = Date.now();
+  lastSampleGpsPoint = null;
+  stationarySkipCount = 0;
+  nextPollAt = Date.now() + 1000;
   updatePollStatus();
   requestWakeLock();
   if (!navigator.geolocation) locationError({ code: 2 });
@@ -366,15 +390,15 @@ function start() {
 }
 
 function stop() {
-  running = false; clearInterval(timer); timer = null;
+  running = false; clearTimeout(timer); timer = null;
   if (watchId !== null) navigator.geolocation.clearWatch(watchId);
   watchId = null; els.start.disabled = false; els.stop.disabled = true; setState("Paused", "idle");
   releaseWakeLock();
 }
 
 function exportCsv() {
-  const header = "timestamp,device,latency_ms,dead_zone,threshold_ms,request_timeout_ms,failure_reason,latitude,longitude,gps_accuracy_m\n";
-  const rows = samples.map((s) => [s.timestamp, s.device, s.latency ?? "", s.deadZone, s.thresholdMs, s.requestTimeoutMs, s.failureReason, s.latitude ?? "", s.longitude ?? "", s.accuracy ?? ""]
+  const header = "timestamp,device,network_state,latency_ms,dead_zone,threshold_ms,request_timeout_ms,failure_reason,latitude,longitude,gps_accuracy_m\n";
+  const rows = samples.map((s) => [s.timestamp, s.device, s.network, s.latency ?? "", s.deadZone, s.thresholdMs, s.requestTimeoutMs, s.failureReason, s.latitude ?? "", s.longitude ?? "", s.accuracy ?? ""]
     .map((v) => `"${String(v).replaceAll('"', '""')}"`).join(","));
   const blob = new Blob(["\ufeff", header, rows.join("\n")], { type: "text/csv;charset=utf-8" });
   const link = document.createElement("a"); link.href = URL.createObjectURL(blob);
@@ -400,6 +424,10 @@ els.keepAwake.addEventListener("change", () => {
   if (!running) return;
   if (els.keepAwake.checked) requestWakeLock();
   else releaseWakeLock();
+});
+els.gpsDelay.addEventListener("change", () => {
+  stationarySkipCount = 0;
+  updatePollStatus();
 });
 window.addEventListener("resize", drawChart);
 window.addEventListener("online", () => { updateNetworkInfo(navigator.connection || {}); if (running) setState("Testing", "running"); });

@@ -17,7 +17,7 @@
         <h1>PingMap</h1>
         <p class="intro">Walk around and record mobile latency alongside your GPS position.</p>
       </div>
-      <span id="runState" class="state idle">Ready</span>
+      <div class="header-actions"><a class="results-link" href="results.html">View captured results →</a><span id="runState" class="state idle">Ready</span></div>
     </header>
 
     <section class="panel controls">
@@ -38,6 +38,8 @@
       <div class="input-with-unit"><input id="requestTimeout" type="number" min="100" max="10000" step="100" value="600"><span>ms</span></div>
       <p class="hint">A probe is marked as timed out at this limit. New probes start every second regardless of the previous result.</p>
       <p id="pollStatus" class="hint poll-status">Probe rate: every second while GPS is moving.</p>
+      <label class="stay-awake"><input id="gpsDelay" type="checkbox" checked> Delay probes while GPS is unchanged</label>
+      <p class="hint">When enabled, unchanged GPS readings are skipped for up to 30 seconds. Turn it off to probe every second regardless of location.</p>
 
       <label for="threshold">Dead-zone threshold</label>
       <div class="input-with-unit"><input id="threshold" type="number" min="1" max="60000" step="50" value="500"><span>ms</span></div>
@@ -86,8 +88,7 @@
     </footer>
   </main>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
   <script src="app.js"></script>
 </body>

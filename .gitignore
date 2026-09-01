@@ -1,0 +1,2 @@
+# Private, device-specific captures and local working data. Never commit these.
+.local/
